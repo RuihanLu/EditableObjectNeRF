@@ -13,15 +13,13 @@
 ## My Work
 
 <div align=center>
-<img src="assets/demo0.gif" width="30%"/>
+<img src="assets/0.gif" width="23%"/>
 &nbsp&nbsp&nbsp&nbsp
-<img src="assets/demo1.gif" width="30%"/>
-</div>
+<img src="assets/1.gif" width="23%"/>
 
-<div align=center>
-<img src="assets/demo2.gif" width="30%"/>
+<img src="assets/2.gif" width="23%"/>
 &nbsp&nbsp&nbsp&nbsp
-<img src="assets/demo3.gif" width="30%"/>
+<img src="assets/3.gif" width="23%"/>
 </div>
 
 ## Installation
