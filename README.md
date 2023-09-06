@@ -10,6 +10,20 @@
 > ICCV 2021
 
 
+## My Work
+
+<div align=center>
+<img src="assets/demo0.gif" width="30%"/>
+&nbsp&nbsp&nbsp&nbsp
+<img src="assets/demo1.gif" width="30%"/>
+</div>
+
+<div align=center>
+<img src="assets/demo2.gif" width="30%"/>
+&nbsp&nbsp&nbsp&nbsp
+<img src="assets/demo3.gif" width="30%"/>
+</div>
+
 ## Installation
 
 We have tested the code on pytorch 1.8.1, while a newer version of pytorch should also work.

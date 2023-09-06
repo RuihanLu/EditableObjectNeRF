@@ -1,14 +1,24 @@
 # Object-NeRF: Data Preparation
 
+## CheckPoints
+
+Download [CKPTLS](https://drive.google.com/file/d/17nOtR6cJBWVxctGH_KeXcs7zqVj2TRQh/view?usp=drive_link) and and unzip it to `/ckptLs`.
+
 ## ToyDesk Dataset
 
 You can download the data through this [link](https://www.dropbox.com/s/bdqiv7pc13p6ugp/toydesk_data_full.zip?dl=0).
+
+Put it at `/data/toydesk_data`
 
 Please note that the transforms_xxx.json comes with transformation matrix (from camera coordinate to world coordinate) in SLAM / OpenCV format (xyz -> right down forward), thus we need to change to NDC format (xyz -> right up back) when applying to standard NeRF training codes.
 
 ## ScanNet Dataset
 
 You can download the pre-processed files through this [link](https://www.dropbox.com/s/k7mxkuone3ucsgd/scannet_object_nerf_data.zip?dl=0).
+
+Put it at `/data/scannet`
+
+Then download the raw scannet dataset ant put them in `/data/scannet/scans`. You can also just download `scene0024_00`, `scene0038_00` and `scene0013_00`.
 
 ### Step 1: Generate ScanNet training frames
 
@@ -36,5 +46,5 @@ We assume the config file as `config/scannet_base_0113.yml`.
     - `scans_dir` is pointing to the ScanNet's official unzipped scans.
 Note that the bounding box and scene transformation has been stored in `scannet_train_detection_data`, which can also be generated following [VoteNet docs](https://github.com/facebookresearch/votenet/blob/main/scannet/README.md).
 
-
 For convenience, you can directly download the preprocessed `scannet_train_detection_data` (Step 3) and scene point cloud (Step 2) from this [link](https://zjueducn-my.sharepoint.com/:u:/g/personal/ybbbbt_zju_edu_cn/ETNgkZwpDnxDlXy3ISevnnQBAWENRZ6j0voeqlfvpijr6A?e=nrMFBS).
+
