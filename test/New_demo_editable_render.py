@@ -1,5 +1,3 @@
-'''两模型合并渲染'''
-
 import sys
 import os
 
@@ -159,7 +157,7 @@ def main(back_config, obj_config, objScale=1, xMove=0, yMove=0, zMove=0):
         # return
 
 if __name__ == "__main__":
-    # 背景
+    # Scene
     back_config = r'test/config/edit_scannet_0113.yaml'
     back_ckpt_path = r'./ckptLs/scannet_0113/scannet0113.ckpt'
     back_prefix = r'scannet_0113_duplicating_moving'
@@ -167,11 +165,11 @@ if __name__ == "__main__":
     obj_config = r'test/config/edit_toy_desk_2.yaml'
     obj_ckpt_path = r'./ckptLs/toydesk2/toydesk2.ckpt'
     obj_prefix = r'toydesk2_duplicating_moving'
-    # Obj缩放移动参数，其中xMove，yMove，zMove参数值可参考像素坐标，和像素坐标差不多，但不是一一对应，受缩放还有投影原理的影响
-    objScale = 0.8      # obj放缩倍率
-    xMove = -10         # 图像坐标系x方向平移，即向右移动为正，向左移动为负
-    yMove = 40          # 图像坐标系y-方向平移，即向上为正，向下为负
-    zMove = -40         # 图像坐标系平移，为正时靠近了obj，obj会变大，为负时远离了obj，obj会变小
+    #Obj scaling and movement parameters, where xMove, yMove, zMove parameter values can be referred to the pixel coordinates, and pixel coordinates are similar, but not a one-to-one correspondence, subject to scaling and projection principle influence
+    objScale = 0.8      # obj zoom ratio
+    xMove = -10         # Image coordinate system x-direction translation, moving to the right is positive, moving to the left is negative
+    yMove = 40          # The image coordinate system is translated in the y-direction, i.e., up is positive, down is negative
+    zMove = -40         # Image coordinate system translation, positively close to the obj, the obj will become larger, negatively far from the obj, the obj will become smaller
 
     back_config = read_testing_config(back_config, back_ckpt_path, back_prefix)
     obj_config = read_testing_config(obj_config, obj_ckpt_path, obj_prefix)
