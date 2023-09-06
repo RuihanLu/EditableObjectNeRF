@@ -219,6 +219,7 @@ def render_rays_multi(
         dir_embedded_list += [dir_embedded]
 
     # inference for each objects
+    # 获取每条射线上每个点的密度和rgb
     rgbs_list = []
     sigmas_list = []
     obj_ids_list = []
@@ -322,4 +323,164 @@ def render_rays_multi(
             noise_std,
             white_back,
         )
+    return results
+
+def render_rays_multi2(
+    models: Dict[str, ObjectNeRF],
+    embeddings: Dict[str, torch.nn.Module],
+    code_library: torch.nn.Module,
+    rays_list: list,
+    obj_instance_ids: list,
+    N_samples: int = 64,
+    use_disp: bool = False,
+    perturb: float = 0,
+    noise_std: float = 0,
+    N_importance: int = 0,
+    chunk: int = 1024 * 32,
+    white_back: bool = False,
+    background_skip_bbox: Dict[str, Any] = None,  # skip rays inside the bbox
+    # **kwargs,
+):
+
+    embedding_xyz, embedding_dir = embeddings["xyz"], embeddings["dir"]
+
+    assert len(rays_list) == len(obj_instance_ids)
+
+    z_vals_list = []
+    xyz_coarse_list = []
+    dir_embedded_list = []
+    rays_o_list = []
+    rays_d_list = []
+
+    for idx, rays in enumerate(rays_list):
+        # Decompose the inputs
+        N_rays = rays.shape[0]
+        rays_o, rays_d = rays[:, 0:3], rays[:, 3:6]  # both (N_rays, 3)
+        near, far = rays[:, 6:7], rays[:, 7:8]  # both (N_rays, 1)
+
+        # Embed direction
+        dir_embedded = embedding_dir(rays_d)  # (N_rays, embed_dir_channels)
+
+        rays_o = rearrange(rays_o, "n1 c -> n1 1 c")
+        rays_d = rearrange(rays_d, "n1 c -> n1 1 c")
+
+        # compute intersection to update near and far
+        # near, far = embedding_xyz.ray_box_intersection(rays_o, rays_d, near, far)
+
+        rays_o_list += [rays_o]
+        rays_d_list += [rays_d]
+
+        # Sample depth points
+        z_steps = torch.linspace(0, 1, N_samples, device=rays.device)  # (N_samples)
+        if not use_disp:  # use linear sampling in depth space
+            z_vals = near * (1 - z_steps) + far * z_steps
+        else:  # use linear sampling in disparity space
+            z_vals = 1 / (1 / near * (1 - z_steps) + 1 / far * z_steps)
+
+        z_vals = z_vals.expand(N_rays, N_samples)
+
+        xyz_coarse = rays_o + rays_d * rearrange(z_vals, "n1 n2 -> n1 n2 1")
+
+        # save for each rays batch
+        xyz_coarse_list += [xyz_coarse]
+        z_vals_list += [z_vals]
+        dir_embedded_list += [dir_embedded]
+
+    # inference for each objects
+    # 获取每条射线上每个点的密度和rgb
+    rgbs_list = []
+    sigmas_list = []
+    obj_ids_list = []
+    for i in range(len(rays_list)):
+        rgbs, sigmas = inference_from_model(
+            model=models["coarse"],
+            embedding_xyz=embedding_xyz,
+            dir_embedded=dir_embedded_list[i],
+            code_library=code_library,
+            xyz=xyz_coarse_list[i],
+            z_vals=z_vals_list[i],
+            chunk=chunk,
+            instance_id=obj_instance_ids[i],
+            # kwargs,
+        )
+
+        # mute in bound samples to remove objects
+        if obj_instance_ids[i] == 0 and background_skip_bbox is not None:
+            in_bound_mask = check_in_any_boxes(background_skip_bbox, xyz_coarse_list[i])
+            sigmas[in_bound_mask] = -1e5
+
+        rgbs_list += [rgbs]
+        sigmas_list += [sigmas]
+        obj_ids_list += [torch.ones_like(sigmas) * i]
+
+    results = {}
+    volume_rendering_multi(
+        results,
+        "coarse",
+        z_vals_list,
+        rgbs_list,
+        sigmas_list,
+        noise_std,
+        white_back,
+        obj_ids_list,
+    )
+
+    if N_importance > 0:  # sample points for fine model
+        rgbs_list = []
+        sigmas_list = []
+        z_vals_fine_list = []
+        for i in range(len(rays_list)):
+            z_vals = z_vals_list[i]
+            z_vals_mid = 0.5 * (
+                z_vals[:, :-1] + z_vals[:, 1:]
+            )  # (N_rays, N_samples-1) interval mid points
+            # recover weights according to z_vals from results
+            weights_ = results["weights_coarse"][results["obj_ids_coarse"] == i]
+            assert weights_.numel() == N_rays * N_samples
+            weights_ = rearrange(weights_, "(n1 n2) -> n1 n2", n1=N_rays, n2=N_samples)
+            z_vals_ = sample_pdf(
+                z_vals_mid, weights_[:, 1:-1].detach(), N_importance, det=(perturb == 0)
+            )
+
+            z_vals = torch.sort(torch.cat([z_vals, z_vals_], -1), -1)[0]
+
+            # if we have ray mask (e.g. bbox), we clip z values
+            rays = rays_list[i]
+            if rays.shape[1] == 10:
+                bbox_mask_near, bbox_mask_far = rays[:, 8:9], rays[:, 9:10]
+                z_val_mask = torch.logical_and(
+                    z_vals > bbox_mask_near, z_vals < bbox_mask_far
+                )
+                z_vals[z_val_mask] = bbox_mask_far.repeat(1, z_vals.shape[1])[
+                    z_val_mask
+                ]
+
+            # combine coarse and fine samples
+            z_vals_fine_list += [z_vals]
+
+            xyz_fine = rays_o_list[i] + rays_d_list[i] * rearrange(
+                z_vals, "n1 n2 -> n1 n2 1"
+            )
+
+            rgbs, sigmas = inference_from_model(
+                model=models["fine"],
+                embedding_xyz=embedding_xyz,
+                dir_embedded=dir_embedded_list[i],
+                code_library=code_library,
+                xyz=xyz_fine,
+                z_vals=z_vals_fine_list[i],
+                chunk=chunk,
+                instance_id=obj_instance_ids[i],
+                # kwargs,
+            )
+
+            # mute in bound samples to remove objects
+            if obj_instance_ids[i] == 0 and background_skip_bbox is not None:
+                in_bound_mask = check_in_any_boxes(background_skip_bbox, xyz_fine)
+                sigmas[in_bound_mask] = -1e5
+
+            rgbs_list += [rgbs]
+            sigmas_list += [sigmas]
+
+        return [results, z_vals_fine_list, rgbs_list, sigmas_list, noise_std, white_back]
     return results

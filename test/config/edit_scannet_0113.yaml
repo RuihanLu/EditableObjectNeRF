@@ -3,11 +3,14 @@
 prefix: null
 chunk: 4096
 img_wh: [320, 240]
-ckpt_path: ../object_nerf_edit_demo_models/scannet_0113/last.ckpt
+ckpt_path: ./ckptLs/scannet_0113/scannet0113.ckpt
 total_frames: 32
 # test_frame: 181
 test_frame: 159
-edit_type: duplication
+#test_frame: 151
+#edit_type: duplication
+#edit_type: pure_rotation
 # 4 right sofa; 6: center rectangle chair
-obj_id_list: [4, 4]
+#obj_id_list: [4, 4]
+obj_id_list: []
 use_bbox_for_test: true

@@ -19,11 +19,14 @@ from utils.bbox_utils import BBoxRayHelper
 from utils.util import read_json
 from train import ObjectNeRFSystem
 from datasets.ray_utils import get_ray_directions, get_rays
-from render_tools.multi_rendering import render_rays_multi
+from render_tools.multi_rendering import render_rays_multi, render_rays_multi2
 
 
-def read_testing_config():
+def read_testing_config(config=None, ckpt_path=None, prefix=None):
     conf_cli = OmegaConf.from_cli()
+    if not config is None: conf_cli.config = config
+    if not ckpt_path is None: conf_cli.ckpt_path = ckpt_path
+    if not prefix is None: conf_cli.prefix = prefix
     conf_test_file = OmegaConf.load(conf_cli.config)
     # order: 1. cli; 2. test_file
     conf_merged = OmegaConf.merge(conf_test_file, conf_cli)
@@ -48,6 +51,19 @@ def read_testing_config():
         conf_merged.ckpt_config.dataset_extra.pcd_path = pcd_file
     return conf_merged
 
+def ChangeT(Toc, xMove=0, yMove=0, zMove=0):
+    R = Toc[:3, :3]
+    T = Toc[:3, 3]
+    R2 = R.T
+    T2 = -R2.dot(T)
+    T2[0] += xMove
+    T2[1] += yMove
+    T2[2] += zMove
+    R = R2.T
+    T = -R.dot(T2)
+    Toc[:3, :3] = R
+    Toc[:3, 3] = T
+    return Toc
 
 class EditableRenderer:
     def __init__(self, config):
@@ -213,6 +229,10 @@ class EditableRenderer:
     ):
         focal = (w / 2) / np.tan((fovx_deg / 2) / (180 / np.pi))
         directions = get_ray_directions(h, w, focal).cuda()  # (h, w, 3)
+        # camera_pose_Twc[0, 3] += 43 / focal
+
+        # camera_pose_Twc = ChangeT(camera_pose_Twc, -10 / focal, 0, 0)
+
         Twc = center_pose_from_avg(self.pose_avg, camera_pose_Twc)
         args = {}
         results = {}
@@ -226,7 +246,7 @@ class EditableRenderer:
         # only render objects
         if render_obj_only:
             self.active_object_ids.remove(0)
-
+        # Use Model Info
         processed_obj_id = []
         for obj_id in self.active_object_ids:
             # count object duplication
@@ -252,9 +272,14 @@ class EditableRenderer:
             Toc = Tow @ Twc
             # resize to NeRF scale
             Toc[:, 3] /= self.scale_factor
+
             Toc = torch.from_numpy(Toc).float().cuda()[:3, :4]
             # all the rays_o and rays_d has been converted to NeRF scale
             rays_o, rays_d = get_rays(directions, Toc)
+            # rays_o[:, 0] = rays_o[:, 0] + 43 / focal
+            # rays_o = rays_o.cpu()
+            # rays_o[:, 0] = rays_o[:, 0] + 43 / focal
+            # rays_o = rays_o.to(rays_d.device)
             rays = self.generate_rays(obj_id, rays_o, rays_d)
             # light anchor should also be transformed
             Tow = torch.from_numpy(Tow).float()
@@ -293,6 +318,102 @@ class EditableRenderer:
 
         return results
 
+    def render_edit2(
+        self,
+        h: int,
+        w: int,
+        camera_pose_Twc: np.ndarray,
+        fovx_deg: float = 70,
+        show_progress: bool = True,
+        render_bg_only: bool = False,
+        render_obj_only: bool = False,
+        white_back: bool = False,
+        scale=1,
+        xMove=0,
+        yMove=0,
+        zMove=0,
+    ):
+        focal = (w / 2) / np.tan((fovx_deg / 2) / (180 / np.pi)) * scale
+        directions = get_ray_directions(h, w, focal).cuda()  # (h, w, 3)
+        # self.pose_avg[0, 3] += xMove / focal
+        Twc = center_pose_from_avg(self.pose_avg, camera_pose_Twc)
+
+        args = {}
+        results = {}
+        obj_ids = []
+        rays_list = []
+
+        # only render background
+        if render_bg_only:
+            self.active_object_ids = [0]
+
+        # only render objects
+        if render_obj_only:
+            self.active_object_ids.remove(0)
+        # Use Model Info
+        processed_obj_id = []
+        for obj_id in self.active_object_ids:
+            # count object duplication
+            obj_duplication_cnt = np.sum(np.array(processed_obj_id) == obj_id)
+            if obj_id == 0:
+                # for scene, transform is Identity
+                Tow = transform = np.eye(4)
+            else:
+                object_pose = self.object_pose_transform[
+                    f"{obj_id}_{obj_duplication_cnt}"
+                ]
+                # transform in the real world scale
+                Tow_orig = self.get_object_bbox_helper(
+                    obj_id
+                ).get_world_to_object_transform()
+                # transform object into center, then apply user-specific object poses
+                transform = np.linalg.inv(Tow_orig) @ object_pose @ Tow_orig
+                # for X_c = Tcw * X_w, when we applying transformation on X_w,
+                # it equals to Tcw * (transform * X_w). So, Tow = inv(transform) * Twc
+                Tow = np.linalg.inv(transform)
+                # Tow = np.linalg.inv(Tow)  # this move obejct to center
+            processed_obj_id.append(obj_id)
+            Toc = Tow @ Twc
+            # resize to NeRF scale
+            Toc[:, 3] /= self.scale_factor
+            Toc = ChangeT(Toc, xMove / focal / 2, yMove / focal / 2, zMove / focal / 2)
+            Toc = torch.from_numpy(Toc).float().cuda()[:3, :4]
+            # all the rays_o and rays_d has been converted to NeRF scale
+            rays_o, rays_d = get_rays(directions, Toc)
+            rays = self.generate_rays(obj_id, rays_o, rays_d)
+            # light anchor should also be transformed
+            Tow = torch.from_numpy(Tow).float()
+            transform = torch.from_numpy(transform).float()
+            obj_ids.append(obj_id)
+            rays_list.append(rays)
+
+        # split chunk
+        B = rays_list[0].shape[0]
+        chunk = self.config.chunk
+        results = defaultdict(list)
+        background_skip_bbox = self.get_skipping_bbox_helper()
+        rendered_ray_chunks_ls = []
+        for i in tqdm(range(0, B, self.config.chunk), disable=not show_progress):
+            with torch.no_grad():
+                rendered_ray_chunks = render_rays_multi2(
+                    models=self.system.models,
+                    embeddings=self.system.embeddings,
+                    code_library=self.system.code_library,
+                    rays_list=[r[i : i + chunk] for r in rays_list],
+                    obj_instance_ids=obj_ids,
+                    N_samples=self.ckpt_config.model.N_samples,
+                    use_disp=self.ckpt_config.model.use_disp,
+                    perturb=0,
+                    noise_std=0,
+                    N_importance=self.ckpt_config.model.N_importance,
+                    chunk=self.ckpt_config.train.chunk,  # chunk size is effective in val mode
+                    white_back=white_back,
+                    background_skip_bbox=background_skip_bbox,
+                    **args,
+                )
+            rendered_ray_chunks_ls.append(rendered_ray_chunks)
+        return rendered_ray_chunks_ls
+
     def remove_scene_object_by_ids(self, obj_ids):
         """
         Create a clean background by removing user specified objects.
@@ -318,6 +439,11 @@ class EditableRenderer:
     def initialize_object_bbox(self, obj_id: int):
         self.object_bbox_ray_helpers[str(obj_id)] = BBoxRayHelper(
             self.config.ckpt_config_path, obj_id
+        )
+
+    def initialize_object_bbox2(self, ckpt_config_path: str, obj_id: int):
+        self.object_bbox_ray_helpers[str(obj_id)] = BBoxRayHelper(
+            ckpt_config_path, obj_id
         )
 
     def get_object_bbox_helper(self, obj_id: int):
