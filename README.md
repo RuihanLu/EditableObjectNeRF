@@ -1,26 +1,4 @@
-# Learning Object-Compositional Neural Radiance Field for Editable Scene Rendering
-### [Project Page](https://zju3dv.github.io/object_nerf) | [Video](https://www.youtube.com/watch?v=VTEROu-Yz04) | [Paper](http://www.cad.zju.edu.cn/home/gfzhang/papers/object_nerf/object_nerf.pdf)
-
-<div align=center>
-<img src="assets/teaser.gif" width="100%"/>
-</div>
-
-> [Learning Object-Compositional Neural Radiance Field for Editable Scene Rendering](http://www.cad.zju.edu.cn/home/gfzhang/papers/object_nerf/object_nerf.pdf)  
-> Bangbang Yang, Yinda Zhang, Yinghao Xu, Yijin Li, Han Zhou, Hujun Bao, Guofeng Zhang, Zhaopeng Cui.  
-> ICCV 2021
-
-
-## My Work
-
-<div align=center>
-<img src="assets/0.gif" width="23%"/>
-&nbsp&nbsp&nbsp&nbsp
-<img src="assets/1.gif" width="23%"/>
-
-<img src="assets/2.gif" width="23%"/>
-&nbsp&nbsp&nbsp&nbsp
-<img src="assets/3.gif" width="23%"/>
-</div>
+# Editable Object NeRF
 
 ## Installation
 
@@ -85,19 +63,17 @@ You can find the rendered image in `debug/rendered_view/render_xxxxxx_scannet_01
 <img src="assets/toydesk_rot.gif" width="30%"/>
 </div> -->
 
-## Citation
+## Our Result
 
-If you find this work useful, please consider citing:
+<div align=center>
+<img src="assets/0.gif" width="23%"/>
+&nbsp&nbsp&nbsp&nbsp
+<img src="assets/1.gif" width="23%"/>
 
-```
-@inproceedings{yang2021objectnerf,
-    title={Learning Object-Compositional Neural Radiance Field for Editable Scene Rendering},
-    author={Yang, Bangbang and Zhang, Yinda and Xu, Yinghao and Li, Yijin and Zhou, Han and Bao, Hujun and Zhang, Guofeng and Cui, Zhaopeng},
-    booktitle = {International Conference on Computer Vision ({ICCV})},
-    month = {October},
-    year = {2021},
-}
-```
+<img src="assets/2.gif" width="23%"/>
+&nbsp&nbsp&nbsp&nbsp
+<img src="assets/3.gif" width="23%"/>
+</div>
 
 
 ## Acknowledgement
